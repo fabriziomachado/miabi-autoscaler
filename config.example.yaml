@@ -1,0 +1,32 @@
+# Configuracao do miabi-autoscaler. Recarregada a quente (a cada ~10s) quando o arquivo muda;
+# uma configuracao invalida e rejeitada e a anterior continua valendo.
+#
+# URL do painel, workspace e a chave de API vem do ambiente (MIABI_URL, MIABI_WORKSPACE, MIABI_TOKEN),
+# a chave NUNCA fica neste arquivo. miabi.url / miabi.workspace sao usados se as variaveis nao existirem.
+miabi:
+  url: https://painel.example.com
+  workspace: "1"
+
+dryRun: false            # true = so registra o que faria, sem escalar nada (vale para todos os apps)
+
+# Valores padrao de todos os apps; cada item de "apps" pode sobrescrever qualquer um deles.
+defaults:
+  min: 2                      # minimo de replicas
+  max: 4                      # maximo de replicas (limite de capacidade do cluster)
+  targetRPSPerReplica: 20     # OBRIGATORIO (aqui ou no app): req/s que uma replica deve atender
+  window: 2m                  # janela de media do trafego, em minutos completos (1m a 1h)
+  interval: 30s               # de quanto em quanto tempo avaliar
+  tolerance: 0.1              # ignora desvios de ate 10% em relacao ao alvo
+  maxP95Ms: 0                 # 0 = desligado; p95 acima disso forca +1 replica
+  maxErrorPercent: 0          # 0 = desligado; taxa de 5xx igual ou acima disso bloqueia reducoes
+  scaleUp:
+    stabilization: 1m         # so sobe se a recomendacao se manteve alta por todo esse tempo
+    maxStep: 2                # maximo de replicas adicionadas por ajuste
+  scaleDown:
+    stabilization: 5m         # so desce ate a MAIOR recomendacao vista nessa janela
+    maxStep: 1                # maximo de replicas removidas por ajuste
+
+apps:
+  - id: 1                     # ID do app no Miabi (aparece na URL da pagina do app)
+    name: hello               # so para logs e metricas
+    # max: 6                  # exemplo de override

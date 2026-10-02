@@ -1,0 +1,4 @@
+.git
+*.md
+config.example.yaml
+template.yaml
