@@ -17,9 +17,15 @@ type Signal struct {
 	Minutes      int     // complete minutes used
 }
 
-// RangeFor picks the analytics range that covers `window` complete minutes plus the running one.
-func RangeFor(window time.Duration) string {
-	n := int(math.Ceil(window.Minutes()))
+// minutesOf rounds a duration up to whole minutes (never negative).
+func minutesOf(d time.Duration) int {
+	return max(int(math.Ceil(d.Minutes()-1e-9)), 0)
+}
+
+// RangeFor picks the analytics range that covers `window` complete minutes ending `delay` before
+// the running minute, plus the running one.
+func RangeFor(window, delay time.Duration) string {
+	n := minutesOf(window) + minutesOf(delay)
 	switch {
 	case n <= 5:
 		return "5m"
@@ -30,11 +36,13 @@ func RangeFor(window time.Duration) string {
 	}
 }
 
-// ComputeSignal averages the last complete minutes of the series. The minute in progress is
-// ignored (it is partial). A window the series does not cover is an error, never "zero traffic":
+// ComputeSignal averages `window` complete minutes of the series, ending `delay` before the
+// running minute. The Miabi analytics only publishes a minute about 100s after it closes, so the
+// newest minutes are still empty; `delay` skips them instead of reading them as "no traffic".
+// The minute in progress is always ignored (it is partial). A window the series does not cover is an error, never "zero traffic":
 // scaling down on missing data would be unsafe.
-func ComputeSignal(series []Bucket, now time.Time, window time.Duration) (Signal, error) {
-	n := int(math.Ceil(window.Minutes()))
+func ComputeSignal(series []Bucket, now time.Time, window, delay time.Duration) (Signal, error) {
+	n := minutesOf(window)
 	if n < 1 {
 		n = 1
 	}
@@ -47,7 +55,7 @@ func ComputeSignal(series []Bucket, now time.Time, window time.Duration) (Signal
 			first = b.T
 		}
 	}
-	cutoff := now.UTC().Truncate(time.Minute) // start of the running minute
+	cutoff := now.UTC().Truncate(time.Minute).Add(-time.Duration(minutesOf(delay)) * time.Minute) // newest minute we trust, exclusive
 	oldest := cutoff.Add(-time.Duration(n) * time.Minute)
 	if oldest.Before(first.UTC().Truncate(time.Minute)) {
 		return Signal{}, fmt.Errorf("a serie do analytics nao cobre a janela de %d min", n)

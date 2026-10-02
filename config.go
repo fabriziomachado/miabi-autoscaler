@@ -45,6 +45,7 @@ type Policy struct {
 	TargetRPS       float64  `yaml:"targetRPSPerReplica"` // requests/s one replica should handle
 	Window          Duration `yaml:"window"`              // averaging window (complete minutes)
 	Interval        Duration `yaml:"interval"`            // evaluation period
+	AnalyticsDelay  Duration `yaml:"analyticsDelay"`      // newest minutes the analytics has not published yet; skipped
 	Tolerance       float64  `yaml:"tolerance"`           // ignore deviations up to this ratio (0.1 = 10%)
 	MaxP95Ms        float64  `yaml:"maxP95Ms"`            // 0 = off; p95 above this forces one extra replica
 	MaxErrorPercent float64  `yaml:"maxErrorPercent"`     // 0 = off; 5xx rate at/above this blocks scale-down
@@ -87,13 +88,15 @@ type fileConfig struct {
 
 func DefaultPolicy() Policy {
 	return Policy{
-		Min:       2,
-		Max:       4,
-		Window:    Duration{2 * time.Minute},
-		Interval:  Duration{30 * time.Second},
-		Tolerance: 0.1,
-		ScaleUp:   Behavior{Stabilization: Duration{time.Minute}, MaxStep: 2},
-		ScaleDown: Behavior{Stabilization: Duration{5 * time.Minute}, MaxStep: 1},
+		Min:      2,
+		Max:      4,
+		Window:   Duration{2 * time.Minute},
+		Interval: Duration{30 * time.Second},
+		// Measured: the Miabi analytics publishes each minute ~98s after it closes.
+		AnalyticsDelay: Duration{2 * time.Minute},
+		Tolerance:      0.1,
+		ScaleUp:        Behavior{Stabilization: Duration{time.Minute}, MaxStep: 2},
+		ScaleDown:      Behavior{Stabilization: Duration{5 * time.Minute}, MaxStep: 1},
 	}
 }
 
@@ -154,6 +157,8 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("%s: 'targetRPSPerReplica' obrigatorio e maior que zero", l)
 		case a.Window.Duration < time.Minute || a.Window.Duration > time.Hour:
 			return fmt.Errorf("%s: 'window' deve ficar entre 1m e 1h (o analytics tem granularidade de 1 minuto)", l)
+		case a.AnalyticsDelay.Duration < 0 || a.Window.Duration+a.AnalyticsDelay.Duration > time.Hour:
+			return fmt.Errorf("%s: 'analyticsDelay' deve ser >= 0 e 'window' + 'analyticsDelay' no maximo 1h", l)
 		case a.Interval.Duration < 5*time.Second:
 			return fmt.Errorf("%s: 'interval' minimo e 5s", l)
 		case a.Tolerance < 0 || a.Tolerance >= 1:

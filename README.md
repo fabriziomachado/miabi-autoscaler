@@ -5,7 +5,8 @@ Escala horizontalmente apps **service** (Docker Swarm) do [Miabi](https://miabi.
 
 ## Como decide
 1. Le `GET /workspaces/{ws}/analytics/summary?app=ID` e calcula o req/s medio dos ultimos minutos **completos**
-   (o minuto em andamento e ignorado). Guarda tambem o p95 e a taxa de 5xx.
+   (o minuto em andamento e ignorado). O analytics so publica cada minuto ~98s depois de ele fechar; por isso os
+   `analyticsDelay` (padrao 2m) minutos mais recentes tambem sao ignorados, senao viram "sem trafego". Guarda tambem o p95 e a taxa de 5xx.
 2. `recomendado = ceil(req/s / targetRPSPerReplica)`, com tolerancia (padrao 10%).
 3. Estabilizacao no estilo do HPA do Kubernetes: **sobe** so se a recomendacao ficou alta durante toda a janela
    `scaleUp.stabilization`; **desce** so ate a maior recomendacao vista em `scaleDown.stabilization`.
@@ -33,6 +34,7 @@ docker run --rm -v "$PWD":/src -w /src golang:1-alpine go test ./...
 Teste sem risco: `dryRun: true` mostra nos logs o que seria feito.
 
 ## Limitacoes
-- O analytics tem granularidade de 1 minuto: a reacao a um pico leva de 1 a 2 minutos (mais a janela `scaleUp`).
+- O analytics tem granularidade de 1 minuto e atraso de publicacao (~98s): a reacao a um pico leva de 3 a 5 minutos
+  (`analyticsDelay` + janela + `scaleUp`).
 - Apps com volume local ficam como container fixo (nao sao service) e sao ignorados.
 - A chave de API pode ter "Allowed IPs"; o IP que o Miabi enxerga depende da rede (NAT do roteador, por exemplo).

@@ -36,6 +36,7 @@ func newTestController(f *fakeAPI) (*Controller, AppConfig) {
 	cfg := AppConfig{ID: 1, Name: "hello", Policy: DefaultPolicy()}
 	cfg.Min, cfg.Max, cfg.TargetRPS = 1, 5, 10
 	cfg.Window.Duration = time.Minute
+	cfg.AnalyticsDelay.Duration = 0 // fake series have no publication lag
 	cfg.ScaleUp.Stabilization.Duration, cfg.ScaleDown.Stabilization.Duration = 0, 0
 	c := NewController(f, NewMetrics("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), "", &Config{Apps: []AppConfig{cfg}}, nil)
 	c.now = func() time.Time { return t0 }

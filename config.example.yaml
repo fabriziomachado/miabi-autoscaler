@@ -16,6 +16,7 @@ defaults:
   targetRPSPerReplica: 20     # OBRIGATORIO (aqui ou no app): req/s que uma replica deve atender
   window: 2m                  # janela de media do trafego, em minutos completos (1m a 1h)
   interval: 30s               # de quanto em quanto tempo avaliar
+  analyticsDelay: 2m          # minutos mais recentes que o analytics ainda nao publicou (medido: ~98s); sao ignorados
   tolerance: 0.1              # ignora desvios de ate 10% em relacao ao alvo
   maxP95Ms: 0                 # 0 = desligado; p95 acima disso forca +1 replica
   maxErrorPercent: 0          # 0 = desligado; taxa de 5xx igual ou acima disso bloqueia reducoes

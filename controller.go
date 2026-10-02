@@ -216,11 +216,11 @@ func (c *Controller) Evaluate(ctx context.Context, app AppConfig, globalDry bool
 		return d
 	}
 
-	sum, err := c.api.Analytics(ctx, app.ID, RangeFor(app.Window.Duration))
+	sum, err := c.api.Analytics(ctx, app.ID, RangeFor(app.Window.Duration, app.AnalyticsDelay.Duration))
 	if err != nil {
 		return fail("analytics", err)
 	}
-	sig, err := ComputeSignal(sum.Series, now, app.Window.Duration)
+	sig, err := ComputeSignal(sum.Series, now, app.Window.Duration, app.AnalyticsDelay.Duration)
 	if err != nil {
 		return fail("signal", err)
 	}

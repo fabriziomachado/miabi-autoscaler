@@ -25,7 +25,7 @@ func buildSeries(reqs []float64, p95 []float64, err5 []float64) []Bucket {
 }
 
 func TestComputeSignalIgnoresRunningMinute(t *testing.T) {
-	s, err := ComputeSignal(buildSeries([]float64{600, 1800}, nil, nil), t0, 2*time.Minute)
+	s, err := ComputeSignal(buildSeries([]float64{600, 1800}, nil, nil), t0, 2*time.Minute, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestComputeSignalIgnoresRunningMinute(t *testing.T) {
 }
 
 func TestComputeSignalP95AndErrors(t *testing.T) {
-	s, err := ComputeSignal(buildSeries([]float64{100, 3}, []float64{80, 900}, []float64{5, 0}), t0, 2*time.Minute)
+	s, err := ComputeSignal(buildSeries([]float64{100, 3}, []float64{80, 900}, []float64{5, 0}), t0, 2*time.Minute, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestComputeSignalMissingMinuteIsZeroTraffic(t *testing.T) {
 		{T: cutoff.Add(-1 * time.Minute), Requests: 120},
 		{T: cutoff, Requests: 1},
 	}
-	s, err := ComputeSignal(series, t0, 2*time.Minute)
+	s, err := ComputeSignal(series, t0, 2*time.Minute, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,19 +67,48 @@ func TestComputeSignalMissingMinuteIsZeroTraffic(t *testing.T) {
 }
 
 func TestComputeSignalRefusesUncoveredWindow(t *testing.T) {
-	if _, err := ComputeSignal(nil, t0, time.Minute); err == nil {
+	if _, err := ComputeSignal(nil, t0, time.Minute, 0); err == nil {
 		t.Fatal("empty series must be an error")
 	}
-	if _, err := ComputeSignal(buildSeries([]float64{10}, nil, nil), t0, 5*time.Minute); err == nil {
+	if _, err := ComputeSignal(buildSeries([]float64{10}, nil, nil), t0, 5*time.Minute, 0); err == nil {
 		t.Fatal("window larger than the series must be an error, not 'zero traffic'")
 	}
 }
 
 func TestRangeFor(t *testing.T) {
 	for window, want := range map[time.Duration]string{time.Minute: "5m", 5 * time.Minute: "5m", 6 * time.Minute: "15m", 15 * time.Minute: "15m", 16 * time.Minute: "1h", time.Hour: "1h"} {
-		if got := RangeFor(window); got != want {
+		if got := RangeFor(window, 0); got != want {
 			t.Errorf("RangeFor(%v) = %s, want %s", window, got, want)
 		}
+	}
+	if got := RangeFor(2*time.Minute, 2*time.Minute); got != "5m" {
+		t.Errorf("window 2m + delay 2m = %s, want 5m", got)
+	}
+	if got := RangeFor(4*time.Minute, 2*time.Minute); got != "15m" {
+		t.Errorf("window 4m + delay 2m = %s, want 15m", got)
+	}
+}
+
+// The analytics publishes a minute ~98s after it closes: the 2 newest complete minutes are still
+// empty. Without a delay they read as "no traffic"; with it they are skipped.
+func TestComputeSignalSkipsMinutesNotYetPublished(t *testing.T) {
+	cutoff := t0.Truncate(time.Minute)
+	series := []Bucket{
+		{T: cutoff.Add(-4 * time.Minute), Requests: 1200},
+		{T: cutoff.Add(-3 * time.Minute), Requests: 1200},
+		{T: cutoff.Add(-2 * time.Minute), Requests: 0}, // not published yet
+		{T: cutoff.Add(-1 * time.Minute), Requests: 0}, // not published yet
+		{T: cutoff, Requests: 5},
+	}
+	s, err := ComputeSignal(series, t0, 2*time.Minute, 2*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := 2400.0 / 120; s.RPS != want {
+		t.Fatalf("rps = %v, want %v (the unpublished minutes must be skipped)", s.RPS, want)
+	}
+	if s0, _ := ComputeSignal(series, t0, 2*time.Minute, 0); s0.RPS != 0 {
+		t.Fatalf("sanity: without delay the empty minutes count as zero traffic, got %v", s0.RPS)
 	}
 }
 
